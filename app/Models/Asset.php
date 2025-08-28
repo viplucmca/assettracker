@@ -98,6 +98,11 @@ class Asset extends Model
         return $this->morphMany(Reminder::class, 'reminder');
     }
 
+    public function mailMessages()
+    {
+        return $this->belongsToMany(MailMessage::class, 'asset_mail_message');
+    }
+
     /**
      * Get all pending reminders for the asset.
      */

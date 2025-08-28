@@ -182,6 +182,7 @@
                                 <a href="#tab_reminders" class="tab-link px-4 py-2 text-sm font-medium text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400 border-b-2 border-transparent hover:border-indigo-500 transition-all duration-200">Reminders</a>
                                 <a href="#tab_contact_lists" class="tab-link px-4 py-2 text-sm font-medium text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400 border-b-2 border-transparent hover:border-indigo-500 transition-all duration-200">Contact Lists</a>
                                 <a href="#tab_compose_email" class="tab-link px-4 py-2 text-sm font-medium text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400 border-b-2 border-transparent hover:border-indigo-500 transition-all duration-200">Compose Email</a>
+                                <a href="#tab_emails" class="tab-link px-4 py-2 text-sm font-medium text-gray-600 hover:text-indigo-600 dark:text-gray-300 dark:hover:text-indigo-400 border-b-2 border-transparent hover:border-indigo-500 transition-all duration-200">Emails</a>
                             </nav>
                         </div>
 
@@ -758,6 +759,40 @@
                                             </button>
                                         </div>
                                     </form>
+                                </div>
+                            </div>
+
+                            <!-- Emails Tab -->
+                            <div id="tab_emails" class="tab-content hidden">
+                                <div class="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
+                                    <h3 class="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Allocated Emails</h3>
+                                    @php($allocatedEmails = $businessEntity->mailMessages()->latest('sent_date')->with('labels')->paginate(10))
+                                    @if ($allocatedEmails->isEmpty())
+                                        <p class="text-gray-500 dark:text-gray-400 text-center py-4">No emails allocated yet.</p>
+                                    @else
+                                        @php($firstEmail = $allocatedEmails->first())
+                                        <div class="flex gap-6">
+                                            <div class="w-full lg:w-5/12">
+                                                <div class="bg-white dark:bg-gray-900 rounded-xl shadow border border-blue-200 dark:border-blue-700 divide-y divide-gray-200 dark:divide-gray-700">
+                                                    @foreach ($allocatedEmails as $email)
+                                                        <a href="{{ route('emails.show', $email->id) }}" target="beEmailViewer" class="block p-4 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                                            <div class="text-blue-900 dark:text-blue-200 font-semibold">{{ $email->subject ?: '(No subject)' }}</div>
+                                                            <div class="text-sm text-gray-600 dark:text-gray-300">From: {{ $email->sender_name ?: $email->sender_email }} — {{ optional($email->sent_date)->format('Y-m-d H:i') }}</div>
+                                                            <div class="mt-1 flex gap-2 flex-wrap">
+                                                                @foreach ($email->labels as $label)
+                                                                    <span class="text-xs px-2 py-1 rounded" style="background-color: {{ $label->color ?? '#e5e7eb' }}; color:#111827">{{ $label->name }}</span>
+                                                                @endforeach
+                                                            </div>
+                                                        </a>
+                                                    @endforeach
+                                                </div>
+                                                <div class="mt-4">{{ $allocatedEmails->withQueryString()->links() }}</div>
+                                            </div>
+                                            <div class="hidden lg:block w-7/12">
+                                                <iframe name="beEmailViewer" class="w-full h-[70vh] bg-white dark:bg-gray-900 rounded-xl border border-blue-200 dark:border-blue-700" src="{{ $firstEmail ? route('emails.show', $firstEmail->id) : '' }}"></iframe>
+                                            </div>
+                                        </div>
+                                    @endif
                                 </div>
                             </div>
 

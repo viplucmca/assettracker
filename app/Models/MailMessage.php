@@ -44,6 +44,16 @@ class MailMessage extends Model
     {
         return $this->belongsToMany(MailLabel::class, 'mail_label_mail_message');
     }
+
+    public function businessEntities(): BelongsToMany
+    {
+        return $this->belongsToMany(BusinessEntity::class, 'business_entity_mail_message');
+    }
+
+    public function assets(): BelongsToMany
+    {
+        return $this->belongsToMany(Asset::class, 'asset_mail_message');
+    }
 }
 
 

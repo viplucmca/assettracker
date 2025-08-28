@@ -92,4 +92,9 @@ public function overdueReminders()
         return $this->hasMany(\App\Models\Document::class, 'business_entity_id');
     }
 
+    public function mailMessages()
+    {
+        return $this->belongsToMany(MailMessage::class, 'business_entity_mail_message');
+    }
+
 }

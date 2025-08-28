@@ -136,6 +136,8 @@ Route::middleware(['auth', EnsureTwoFactorVerified::class])->group(function () {
     // Email Section
     Route::get('/emails', [MailMessageController::class, 'index'])->name('emails.index');
     Route::get('/emails/{id}', [MailMessageController::class, 'show'])->name('emails.show');
+    Route::post('/emails/{id}/allocate-entity', [MailMessageController::class, 'allocateToBusinessEntity'])->name('emails.allocate.entity');
+    Route::post('/emails/{id}/allocate-asset', [MailMessageController::class, 'allocateToAsset'])->name('emails.allocate.asset');
     Route::get('/emails-sync', [GmailController::class, 'sync'])->name('emails.sync');
 
     // Email Routes (Nested under Business Entities)

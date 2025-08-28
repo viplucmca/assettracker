@@ -39,19 +39,51 @@
                     <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-blue-200 dark:border-blue-700">
                         <div class="divide-y divide-gray-200 dark:divide-gray-700">
                             @forelse ($messages as $message)
-                                <a href="{{ route('emails.show', $message->id) }}" target="emailViewer" class="block p-4 hover:bg-gray-50 dark:hover:bg-gray-700">
-                                    <div class="flex items-center justify-between">
-                                        <div>
+                                <div class="p-4 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <div class="flex items-start justify-between gap-3">
+                                        <a href="{{ route('emails.show', $message->id) }}" target="emailViewer" class="flex-1">
                                             <div class="text-blue-900 dark:text-blue-200 font-semibold">{{ $message->subject ?: '(No subject)' }}</div>
                                             <div class="text-sm text-gray-600 dark:text-gray-300">From: {{ $message->sender_name ?: $message->sender_email }} — {{ optional($message->sent_date)->format('Y-m-d H:i') }}</div>
-                                        </div>
-                                        <div class="flex gap-2">
-                                            @foreach ($message->labels as $label)
-                                                <span class="text-xs px-2 py-1 rounded" style="background-color: {{ $label->color ?? '#e5e7eb' }}; color:#111827">{{ $label->name }}</span>
-                                            @endforeach
+                                            <div class="mt-1 flex gap-2 flex-wrap">
+                                                @foreach ($message->labels as $label)
+                                                    <span class="text-xs px-2 py-1 rounded" style="background-color: {{ $label->color ?? '#e5e7eb' }}; color:#111827">{{ $label->name }}</span>
+                                                @endforeach
+                                            </div>
+                                        </a>
+                                        <div class="shrink-0">
+                                            <details class="relative">
+                                                <summary class="cursor-pointer select-none inline-flex items-center px-2 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-xs">Allocate</summary>
+                                                <div class="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow p-3 z-10">
+                                                    <form method="POST" action="{{ route('emails.allocate.entity', $message->id) }}" class="space-y-2">
+                                                        @csrf
+                                                        <label class="block text-xs text-gray-600 dark:text-gray-300">Business Entity</label>
+                                                        <select name="business_entity_id" class="w-full border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white text-sm">
+                                                            <option value="">Select entity...</option>
+                                                            @php($entities = \App\Models\BusinessEntity::where('user_id', auth()->id())->orderBy('legal_name')->get())
+                                                            @foreach ($entities as $entity)
+                                                                <option value="{{ $entity->id }}">{{ $entity->legal_name }}</option>
+                                                            @endforeach
+                                                        </select>
+                                                        <button class="w-full bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs">Allocate to Entity</button>
+                                                    </form>
+                                                    <div class="my-2 border-t border-gray-200 dark:border-gray-700"></div>
+                                                    <form method="POST" action="{{ route('emails.allocate.asset', $message->id) }}" class="space-y-2">
+                                                        @csrf
+                                                        <label class="block text-xs text-gray-600 dark:text-gray-300">Asset</label>
+                                                        <select name="asset_id" class="w-full border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white text-sm">
+                                                            <option value="">Select asset...</option>
+                                                            @php($assets = \App\Models\Asset::where('user_id', auth()->id())->orderBy('name')->get())
+                                                            @foreach ($assets as $asset)
+                                                                <option value="{{ $asset->id }}">{{ $asset->name }} ({{ $asset->asset_type }})</option>
+                                                            @endforeach
+                                                        </select>
+                                                        <button class="w-full bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs">Allocate to Asset</button>
+                                                    </form>
+                                                </div>
+                                            </details>
                                         </div>
                                     </div>
-                                </a>
+                                </div>
                             @empty
                                 <div class="p-6 text-gray-500 dark:text-gray-400">No emails found.</div>
                             @endforelse
