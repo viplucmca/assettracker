@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Storage;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Middleware\EnsureTwoFactorVerified;
 use App\Http\Controllers\ContactListController;
+use App\Http\Controllers\Email\MailMessageController;
+use App\Http\Controllers\Email\GmailController;
 
 
 
@@ -129,6 +131,11 @@ Route::middleware(['auth', EnsureTwoFactorVerified::class])->group(function () {
 
     // Contact List Routes (Nested under Business Entities)
     Route::resource('business-entities.contact-lists', ContactListController::class);
+
+    // Email Section
+    Route::get('/emails', [MailMessageController::class, 'index'])->name('emails.index');
+    Route::get('/emails/{id}', [MailMessageController::class, 'show'])->name('emails.show');
+    Route::get('/emails-sync', [GmailController::class, 'sync'])->name('emails.sync');
 
     // Email Routes (Nested under Business Entities)
     Route::get('business-entities/{businessEntity}/compose-email-data', [BusinessEntityController::class, 'getComposeEmailData'])->name('business-entities.compose-email-data');
