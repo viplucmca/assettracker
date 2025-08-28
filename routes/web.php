@@ -14,6 +14,7 @@ use App\Http\Middleware\EnsureTwoFactorVerified;
 use App\Http\Controllers\ContactListController;
 use App\Http\Controllers\Email\MailMessageController;
 use App\Http\Controllers\Email\GmailController;
+use App\Http\Controllers\Email\EmailUploadController;
 
 
 

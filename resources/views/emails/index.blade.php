@@ -27,33 +27,51 @@
                     </select>
                     <button class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-4 py-2 rounded-md">Filter</button>
                 </form>
-                <a href="{{ route('emails.sync') }}" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 rounded-md">Sync Gmail (Dummy)</a>
-            </div>
-
-            <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-blue-200 dark:border-blue-700">
-                <div class="divide-y divide-gray-200 dark:divide-gray-700">
-                    @forelse ($messages as $message)
-                        <a href="{{ route('emails.show', $message->id) }}" class="block p-4 hover:bg-gray-50 dark:hover:bg-gray-700">
-                            <div class="flex items-center justify-between">
-                                <div>
-                                    <div class="text-blue-900 dark:text-blue-200 font-semibold">{{ $message->subject ?: '(No subject)' }}</div>
-                                    <div class="text-sm text-gray-600 dark:text-gray-300">From: {{ $message->sender_name ?: $message->sender_email }} — {{ optional($message->sent_date)->format('Y-m-d H:i') }}</div>
-                                </div>
-                                <div class="flex gap-2">
-                                    @foreach ($message->labels as $label)
-                                        <span class="text-xs px-2 py-1 rounded" style="background-color: {{ $label->color ?? '#e5e7eb' }}; color:#111827">{{ $label->name }}</span>
-                                    @endforeach
-                                </div>
-                            </div>
-                        </a>
-                    @empty
-                        <div class="p-6 text-gray-500 dark:text-gray-400">No emails found.</div>
-                    @endforelse
+                <div class="flex gap-2">
+                    <a href="{{ route('emails.sync') }}" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-4 py-2 rounded-md">Sync Gmail</a>
                 </div>
             </div>
 
-            <div>
-                {{ $messages->links() }}
+            @php $firstMessage = $messages->first(); @endphp
+
+            <div class="flex gap-6">
+                <div class="w-full lg:w-5/12">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-blue-200 dark:border-blue-700">
+                        <div class="divide-y divide-gray-200 dark:divide-gray-700">
+                            @forelse ($messages as $message)
+                                <a href="{{ route('emails.show', $message->id) }}" target="emailViewer" class="block p-4 hover:bg-gray-50 dark:hover:bg-gray-700">
+                                    <div class="flex items-center justify-between">
+                                        <div>
+                                            <div class="text-blue-900 dark:text-blue-200 font-semibold">{{ $message->subject ?: '(No subject)' }}</div>
+                                            <div class="text-sm text-gray-600 dark:text-gray-300">From: {{ $message->sender_name ?: $message->sender_email }} — {{ optional($message->sent_date)->format('Y-m-d H:i') }}</div>
+                                        </div>
+                                        <div class="flex gap-2">
+                                            @foreach ($message->labels as $label)
+                                                <span class="text-xs px-2 py-1 rounded" style="background-color: {{ $label->color ?? '#e5e7eb' }}; color:#111827">{{ $label->name }}</span>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                </a>
+                            @empty
+                                <div class="p-6 text-gray-500 dark:text-gray-400">No emails found.</div>
+                            @endforelse
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        {{ $messages->links() }}
+                    </div>
+                </div>
+
+                <div class="hidden lg:block w-7/12">
+                    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg border border-blue-200 dark:border-blue-700 overflow-hidden">
+                        @if ($firstMessage)
+                            <iframe name="emailViewer" src="{{ route('emails.show', $firstMessage->id) }}" class="w-full" style="height: calc(100vh - 260px);"></iframe>
+                        @else
+                            <div class="p-6 text-gray-500 dark:text-gray-400">Select an email to preview.</div>
+                        @endif
+                    </div>
+                </div>
             </div>
         </div>
     </div>

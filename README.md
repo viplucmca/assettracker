@@ -128,12 +128,26 @@ AWS_BUCKET=your_bucket_name
    AWS_SECRET_ACCESS_KEY=your_aws_secret
    AWS_DEFAULT_REGION=your_aws_region
    AWS_BUCKET=your_bucket_name
+   
+   # Gmail API (for Emails section)
+   GMAIL_ENABLED=false
+   GMAIL_CLIENT_ID=
+   GMAIL_CLIENT_SECRET=
+   GMAIL_REFRESH_TOKEN=
+   GMAIL_USER_EMAIL=
+   GMAIL_LABEL=INBOX
    ```
 
 6. **Run database migrations**
    ```bash
    php artisan migrate
    ```
+
+### Emails Section
+
+- Access via Dashboard → Emails
+- Sync Gmail: uses credentials above. When `GMAIL_ENABLED=false` or creds missing, a dummy sync runs.
+- Upload emails: Emails → Upload; accepts `.eml`/`.msg` files (10MB each). Files stored under `storage/app/emails/uploads/{user_id}` and listed as `uploaded`.
 
 7. **Build frontend assets**
    ```bash
