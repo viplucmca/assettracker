@@ -73,6 +73,9 @@ Route::middleware(['auth', EnsureTwoFactorVerified::class])->group(function () {
     Route::post('entity-persons/{entityPerson}/finalize-due-date', [EntityPersonController::class, 'finalizeDueDate'])->name('entity-persons.finalize-due-date');
     Route::post('entity-persons/{entityPerson}/extend-due-date', [EntityPersonController::class, 'extendDueDate'])->name('entity-persons.extend-due-date');
 
+    // Person details route - show all roles for a person across all entities
+    Route::get('persons/{person}', [EntityPersonController::class, 'showPerson'])->name('persons.show');
+
     // Bank Accounts
     Route::get('/business-entities/{businessEntity}/bank-accounts/create', [BusinessEntityController::class, 'createBankAccount'])->name('business-entities.bank-accounts.create');
     Route::get('/business-entities/{businessEntity}/bank-accounts', function ($businessEntity) {

@@ -238,4 +238,22 @@ class EntityPersonController extends Controller
 
         return redirect()->route('dashboard')->with('error', 'No ASIC due date to extend.');
     }
+
+    /**
+     * Display all roles for a specific person across all entities.
+     */
+    public function showPerson(Person $person)
+    {
+        // Get all entity-person relationships for this person
+        $entityPersons = EntityPerson::where('person_id', $person->id)
+            ->with(['businessEntity', 'person', 'trusteeEntity'])
+            ->orderBy('business_entity_id')
+            ->orderBy('role')
+            ->get();
+
+        // Group by business entity for better organization
+        $groupedRoles = $entityPersons->groupBy('business_entity_id');
+
+        return view('persons.show', compact('person', 'entityPersons', 'groupedRoles'));
+    }
 }

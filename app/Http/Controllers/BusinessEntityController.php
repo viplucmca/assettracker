@@ -218,6 +218,21 @@ class BusinessEntityController extends Controller
             $q->where('user_id', $user->id);
         })->with(['person', 'trusteeEntity', 'businessEntity'])->get();
 
+        // Group persons by their actual Person record to avoid duplicates
+        $uniquePersons = $persons->where('person_id', '!=', null)
+            ->groupBy('person_id')
+            ->map(function($entityPersonGroup) {
+                $firstEntityPerson = $entityPersonGroup->first();
+                return [
+                    'person' => $firstEntityPerson->person,
+                    'entityPersons' => $entityPersonGroup,
+                    'totalRoles' => $entityPersonGroup->count(),
+                    'activeRoles' => $entityPersonGroup->where('role_status', 'Active')->count(),
+                    'resignedRoles' => $entityPersonGroup->where('role_status', 'Resigned')->count(),
+                ];
+            })
+            ->values();
+
         $assetDueDates = Asset::whereHas('businessEntity', function($q) use ($user) {
             $q->where('user_id', $user->id);
         })->where(function($q) {
@@ -237,6 +252,7 @@ class BusinessEntityController extends Controller
             'assets',
             'allReminders', // Pass combined reminders
             'persons',
+            'uniquePersons',
             'assetDueDates',
             'entityDueDates'
         ));

@@ -343,22 +343,31 @@
                 </div>
                 <div class="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 border border-blue-200 dark:border-blue-700 transition duration-300 hover:shadow-xl">
                     <h3 class="text-lg font-semibold text-blue-700 dark:text-blue-300 mb-2">Persons</h3>
-                    <p class="text-sm text-gray-600 dark:text-gray-400">Total: {{ $persons->count() }}</p>
-                    @if ($persons->isEmpty())
+                    <p class="text-sm text-gray-600 dark:text-gray-400">Total: {{ $uniquePersons->count() }}</p>
+                    @if ($uniquePersons->isEmpty())
                         <p class="text-gray-600 dark:text-gray-400 mt-2">No persons yet.</p>
                     @else
                         <ul class="mt-2 space-y-2">
-                            @foreach ($persons as $entityPerson)
+                            @foreach ($uniquePersons as $personData)
                                 <li class="text-gray-800 dark:text-gray-100">
-                                    <a href="{{ route('entity-persons.show', $entityPerson->id) }}" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-                                        @if ($entityPerson->person)
-                                            {{ $entityPerson->person->first_name }} {{ $entityPerson->person->last_name }}
-                                        @elseif ($entityPerson->trusteeEntity)
-                                            {{ $entityPerson->trusteeEntity->legal_name }} (Trustee)
-                                        @endif
-                                        - {{ $entityPerson->businessEntity->legal_name ?? 'Unknown Entity' }}
+                                    <a href="{{ route('persons.show', $personData['person']->id) }}" class="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+                                        {{ $personData['person']->first_name }} {{ $personData['person']->last_name }}
                                     </a>
-                                    <span class="text-xs text-gray-500 dark:text-gray-400">({{ $entityPerson->role ?? 'Unknown Role' }})</span>
+                                    <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 mr-2">
+                                            {{ $personData['totalRoles'] }} role{{ $personData['totalRoles'] != 1 ? 's' : '' }}
+                                        </span>
+                                        @if($personData['activeRoles'] > 0)
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200 mr-2">
+                                                {{ $personData['activeRoles'] }} active
+                                            </span>
+                                        @endif
+                                        @if($personData['resignedRoles'] > 0)
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                                                {{ $personData['resignedRoles'] }} resigned
+                                            </span>
+                                        @endif
+                                    </div>
                                 </li>
                             @endforeach
                         </ul>

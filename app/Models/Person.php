@@ -27,4 +27,9 @@ class Person extends Model
             ->withPivot(['role', 'appointment_date', 'resignation_date', 'role_status', 'shares_percentage', 'authority_level', 'asic_updated', 'asic_due_date'])
             ->withTimestamps();
     }
+
+    public function entityPersons()
+    {
+        return $this->hasMany(EntityPerson::class, 'person_id');
+    }
 }
