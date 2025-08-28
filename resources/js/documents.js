@@ -185,10 +185,28 @@ document.addEventListener('DOMContentLoaded', function() {
                 actionButtons.appendChild(downloadButton);
                 actionButtons.appendChild(deleteButton);
 
-                const fileExtension = name.split('.').pop().toLowerCase();
+                // Robust file extension detection
+                const extractExtension = (inputUrl, inputName) => {
+                    const safe = (str) => (str || '').toString().toLowerCase();
+                    const nameExt = safe(inputName).includes('.') ? safe(inputName).split('.').pop() : '';
+                    if (nameExt) return nameExt;
+                    try {
+                        const urlObj = new URL(inputUrl, window.location.origin);
+                        const pathname = urlObj.pathname || '';
+                        const lastSegment = pathname.split('/').pop() || '';
+                        if (lastSegment.includes('.')) {
+                            return lastSegment.split('.').pop().toLowerCase();
+                        }
+                    } catch (_) {
+                        // Ignore URL parsing errors; fall through
+                    }
+                    return '';
+                };
+
+                const fileExtension = extractExtension(url, name);
 
                 // Image preview
-                if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(fileExtension)) {
+                if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'].includes(fileExtension) || type === 'image') {
                     const previewDiv = document.createElement('div');
                     previewDiv.className = 'text-center';
 

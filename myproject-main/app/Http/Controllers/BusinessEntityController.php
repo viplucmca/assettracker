@@ -11,37 +11,16 @@ use App\Models\BankAccount;
 use App\Models\BankStatementEntry;
 use App\Models\Transaction;
 use Illuminate\Http\Request;
-use League\Csv\Reader; // Added for CSV processing
 use Carbon\Carbon; // Added for date manipulation
 use Illuminate\Support\Facades\Log; // Added for logging
 use Illuminate\Support\Facades\Storage; // Added for file storage
-use App\Services\DocumentScannerService; // Service for document scanning
-use OpenAI\Laravel\Facades\OpenAI; // Added for OpenAI interaction
-use Spatie\Dropbox\Client as DropboxClient; // Added for Dropbox client interaction
 use Illuminate\Validation\ValidationException; // Added for handling validation exceptions
 use App\Models\Reminder;
 use Illuminate\Support\Facades\Auth;
 
 class BusinessEntityController extends Controller
 {
-    /**
-     * The document scanner service instance.
-     *
-     * @var \App\Services\DocumentScannerService
-     */
-    protected $scannerService;
 
-    /**
-     * Create a new controller instance.
-     * Inject the DocumentScannerService.
-     *
-     * @param \App\Services\DocumentScannerService $scannerService
-     * @return void
-     */
-    public function __construct(DocumentScannerService $scannerService)
-    {
-        $this->scannerService = $scannerService;
-    }
 
     /**
      * Display a listing of the business entities.
@@ -254,77 +233,7 @@ class BusinessEntityController extends Controller
         ));
     }
 
-    /**
-     * Extract transaction information from an uploaded document using OpenAI.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return \Illuminate\Http\RedirectResponse
-     */
-    public function extractTransactionInfo(Request $request)
-    {
-        // Validate the request
-        $request->validate([
-            'document' => 'required|file|mimes:jpeg,png,jpg,pdf|max:2048', // Allowed file types and size
-            'document_name' => 'nullable|string|max:255',
-            'business_entity_id' => 'required|exists:business_entities,id',
-        ]);
 
-        try {
-            $file = $request->file('document');
-            $businessEntity = BusinessEntity::findOrFail($request->business_entity_id);
-
-            // Prepare file name and path for Dropbox storage
-            $originalName = $file->getClientOriginalName();
-            $customName = $request->document_name ?: pathinfo($originalName, PATHINFO_FILENAME);
-            $extension = $file->getClientOriginalExtension();
-            $uploadDate = now()->format('Y-m-d');
-            $fileName = "{$customName}_{$uploadDate}.{$extension}";
-            $folderPath = "Receipts/{$businessEntity->id}_{$businessEntity->legal_name}"; // Organize by entity
-            $dropboxPath = "{$folderPath}/{$fileName}";
-
-            // Ensure the directory exists and upload the file to Dropbox
-            if (!Storage::disk('dropbox')->exists($folderPath)) {
-                Storage::disk('dropbox')->makeDirectory($folderPath);
-            }
-            Storage::disk('dropbox')->put($dropboxPath, file_get_contents($file->getRealPath()));
-
-            // Extract information using OpenAI (Consider using DocumentScannerService instead for consistency)
-            $fileContent = file_get_contents($file->getRealPath());
-            // Note: Using text-davinci-003 might be outdated/less effective than gpt-4o used elsewhere.
-            // Consider refactoring to use DocumentScannerService->extractInformation here as well.
-            $response = OpenAI::completions()->create([
-                'model' => 'text-davinci-003', // Consider updating model
-                'prompt' => "Extract the following information from this receipt/invoice content: date, amount, description, GST amount, and whether GST is included or excluded. Provide the output in JSON format.\n\n" . base64_encode($fileContent),
-                'max_tokens' => 500,
-            ]);
-
-            $extractedData = json_decode($response->choices[0]->text, true) ?? [];
-
-            // Prepare transaction data based on extracted info
-            $transactionData = [
-                'business_entity_id' => $businessEntity->id,
-                'date' => $extractedData['date'] ?? now()->toDateString(),
-                'amount' => $extractedData['amount'] ?? null,
-                'description' => $extractedData['description'] ?? 'Extracted from receipt',
-                'gst_amount' => $extractedData['gst_amount'] ?? null,
-                'gst_status' => $extractedData['gst_status'] ?? null, // e.g., 'included', 'excluded', 'gst_free'
-                'receipt_path' => $dropboxPath, // Store the path to the uploaded receipt
-            ];
-
-            // Redirect back to dashboard with extracted data for user review
-            return redirect()->route('dashboard')
-                ->with('transactionData', $transactionData) // Pass data to pre-fill form
-                ->with('success', 'Receipt uploaded and data extracted. Please review and edit the fields below.')
-                ->with('keep_open', true); // Flag to keep a modal or section open
-
-        } catch (\Exception $e) {
-            Log::error("Failed to extract transaction info: " . $e->getMessage());
-            // Redirect back with an error message
-            return redirect()->route('dashboard')
-                ->with('error', 'Failed to process receipt: ' . $e->getMessage())
-                ->with('keep_open', true);
-        }
-    }
 
     /**
      * Store a new transaction for a business entity.
@@ -359,14 +268,11 @@ class BusinessEntityController extends Controller
             $uploadDate = now()->format('Y-m-d');
             $fileName = "{$customName}_{$uploadDate}.{$extension}";
             $folderPath = "Receipts/{$businessEntity->id}_{$businessEntity->legal_name}";
-            $dropboxPath = "{$folderPath}/{$fileName}";
+            $s3Path = "{$folderPath}/{$fileName}";
 
-            // Ensure directory exists and upload
-            if (!Storage::disk('dropbox')->exists($folderPath)) {
-                Storage::disk('dropbox')->makeDirectory($folderPath);
-            }
-            Storage::disk('dropbox')->put($dropboxPath, file_get_contents($file->getRealPath()));
-            $receiptPath = $dropboxPath; // Update receipt path with the newly uploaded file
+            // Upload file to S3
+            Storage::disk('s3')->put($s3Path, file_get_contents($file->getRealPath()));
+            $receiptPath = $s3Path; // Update receipt path with the newly uploaded file
         }
 
         // Create the transaction record
@@ -514,63 +420,23 @@ class BusinessEntityController extends Controller
                 ? $request->file_name . '.' . $file->getClientOriginalExtension()
                 : time() . '_' . $file->getClientOriginalName(); // Use timestamp prefix for uniqueness
 
-            // Define Dropbox path structure
+            // Define S3 path structure
             $folderPath = "GeneralInfo/{$businessEntity->legal_name}/docs"; // Consistent path structure
-            $dropboxPath = "{$folderPath}/{$fileName}";
+            $s3Path = "{$folderPath}/{$fileName}";
 
-            // Initialize Dropbox client (consider injecting via constructor or service container)
-            $dropboxClient = new DropboxClient(
-                config('filesystems.disks.dropbox.authorization_token') // Ensure token is configured
-            );
+            // Upload file to S3
+            Storage::disk('s3')->put($s3Path, file_get_contents($file->getRealPath()));
 
-            // Create directory if it doesn't exist using Dropbox API directly
-            // Storage::disk('dropbox')->directoryExists() might not work reliably with flysystem-dropbox v2+
-            try {
-                 // Check metadata to see if folder exists, listFolder is another option
-                 $dropboxClient->getMetadata($folderPath);
-            } catch (\Exception $e) {
-                 // If getMetadata throws path/not_found error, create the folder
-                 if (strpos($e->getMessage(), 'path/not_found') !== false) {
-                    Log::info("Creating Dropbox folder: " . $folderPath);
-                    $dropboxClient->createFolder($folderPath);
-                 } else {
-                    // Rethrow other errors during metadata check
-                    throw $e;
-                 }
-            }
+            // Generate a temporary URL for immediate access (expires in 1 hour)
+            $fileUrl = Storage::disk('s3')->temporaryUrl($s3Path, now()->addHour());
 
-            // Upload file using stream for better memory efficiency
-            $stream = fopen($file->getRealPath(), 'r');
-            Storage::disk('dropbox')->writeStream($dropboxPath, $stream); // Use Laravel Storage facade
-
-            // Close the stream resource
-            if (is_resource($stream)) {
-                fclose($stream);
-            }
-
-            // Generate a shared link for immediate access (optional)
-            $dropboxFileUrl = null;
-            try {
-                $sharedLink = $dropboxClient->createSharedLinkWithSettings($dropboxPath, [
-                    'requested_visibility' => 'public' // Or 'team_only', 'password', etc.
-                ]);
-
-                // Convert to a direct download link (if needed)
-                $directUrl = str_replace('www.dropbox.com', 'dl.dropboxusercontent.com', $sharedLink['url']);
-                $dropboxFileUrl = str_replace('?dl=0', '?raw=1', $directUrl); // dl=1 also works for direct download
-
-            } catch (\Exception $e) {
-                Log::warning("Failed to create shared link for {$dropboxPath}: " . $e->getMessage());
-                // Proceed without the shared link if creation fails
-            }
-
-            // Redirect back with success message and optional file URL
+            // Redirect back with success message and file URL
             return redirect()->route('business-entities.show', $businessEntity->id)
                 ->with('success', 'Document uploaded successfully!')
-                ->with('file_url', $dropboxFileUrl); // Pass URL to the view if generated
+                ->with('file_url', $fileUrl);
 
         } catch (\Exception $e) {
-            Log::error("Failed to upload document to Dropbox for entity {$businessEntity->id}: " . $e->getMessage());
+            Log::error("Failed to upload document to S3 for entity {$businessEntity->id}: " . $e->getMessage());
             // Redirect back with a generic error message
             return redirect()->route('business-entities.show', $businessEntity->id)
                ->with('error', 'Failed to upload document. Please try again.');
@@ -792,176 +658,9 @@ class BusinessEntityController extends Controller
      * @param  \App\Models\BankAccount  $bankAccount
      * @return \Illuminate\View\View|\Illuminate\Http\RedirectResponse
      */
-    public function uploadStatement(BusinessEntity $businessEntity, BankAccount $bankAccount)
-    {
-         // Authorization check
-        if ($bankAccount->business_entity_id !== $businessEntity->id) {
-            abort(403, 'Unauthorized action.');
-        }
-        // Return the statement upload view
-        return view('business-entities.bank-accounts.statement-upload', compact('businessEntity', 'bankAccount'));
-    }
-
-    /**
-     * Process an uploaded bank statement CSV file.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\BusinessEntity  $businessEntity
-     * @param  \App\Models\BankAccount  $bankAccount
-     * @return \Illuminate\Http\RedirectResponse
-     */
-    public function processStatement(Request $request, BusinessEntity $businessEntity, BankAccount $bankAccount)
-    {
-         // Authorization check
-        if ($bankAccount->business_entity_id !== $businessEntity->id) {
-            abort(403, 'Unauthorized action.');
-        }
-
-        // Validate the uploaded CSV file
-        $request->validate([
-            'csv_file' => 'required|file|mimes:csv,txt|max:2048', // Allow CSV and TXT extensions
-            // 'business_entity_id' is available via $businessEntity
-        ]);
-
-        $file = $request->file('csv_file');
-
-        try {
-            // Configure and read the CSV file using league/csv
-            $csv = Reader::createFromPath($file->getRealPath(), 'r');
-            $csv->setDelimiter(','); // Common delimiter, adjust if needed
-            // $csv->setEnclosure('"'); // Common enclosure
-            $csv->setHeaderOffset(0); // Assume header row is the first row (index 0)
-
-            // Get header and records
-            $headers = array_map('trim', array_map('strtolower', $csv->getHeader())); // Normalize headers
-            $records = $csv->getRecords(); // Get iterator for records
-
-        } catch (\Exception $e) {
-            Log::error("Failed to read CSV file: " . $e->getMessage());
-            return redirect()->route('business-entities.show', [$businessEntity->id, '#tab_bank_accounts'])
-                ->with('error', 'Failed to read CSV file. Ensure it is a valid CSV.');
-        }
-
-        $transactionCount = 0;
-        $skippedRows = [];
-        $rowNumber = 1; // Start after header
-
-        // Define expected columns (lowercase) - adjust based on common bank formats
-        $dateCol = 'date'; // Or 'transaction date', etc.
-        $amountCol = 'amount'; // Or 'debit', 'credit'
-        $descCol = 'description'; // Or 'details', 'narrative'
-        $debitCol = 'debit';
-        $creditCol = 'credit';
-
-        // Basic header validation
-        $hasDate = in_array($dateCol, $headers);
-        $hasAmount = in_array($amountCol, $headers);
-        $hasDebit = in_array($debitCol, $headers);
-        $hasCredit = in_array($creditCol, $headers);
-        $hasDesc = in_array($descCol, $headers);
-
-        if (!$hasDate || !($hasAmount || ($hasDebit && $hasCredit)) || !$hasDesc) {
-             Log::error("CSV header missing required columns (date, amount/debit+credit, description). Headers found: " . implode(', ', $headers));
-             return redirect()->route('business-entities.show', [$businessEntity->id, '#tab_bank_accounts'])
-                ->with('error', 'CSV file is missing required columns (e.g., date, amount/debit+credit, description).');
-        }
 
 
-        foreach ($records as $record) {
-            $rowNumber++;
-            try {
-                // Map record to lowercase keys based on headers
-                $recordData = array_change_key_case(array_map('trim', $record), CASE_LOWER);
 
-                // Extract data based on headers
-                $date = $recordData[$dateCol] ?? null;
-                $description = $recordData[$descCol] ?? 'No description';
-
-                // Determine amount (handle separate debit/credit or single amount column)
-                $amount = null;
-                if ($hasAmount) {
-                    $amount = $recordData[$amountCol] ?? null;
-                } elseif ($hasDebit && $hasCredit) {
-                    $debit = $recordData[$debitCol] ?? 0;
-                    $credit = $recordData[$creditCol] ?? 0;
-                    $amount = floatval($credit) - floatval($debit); // Credit is positive, Debit is negative
-                }
-
-                // --- Data Validation and Cleaning ---
-                if (empty($date) || $amount === null || $amount === '') {
-                    $skippedRows[] = "Row $rowNumber: Missing or empty 'date' or 'amount'.";
-                    Log::warning($skippedRows[count($skippedRows) - 1], ['record' => $recordData]);
-                    continue; // Skip this row
-                }
-
-                // Clean amount (remove currency symbols, commas)
-                $amount = preg_replace('/[^\d.-]/', '', $amount);
-
-                if (!is_numeric($amount)) {
-                    $skippedRows[] = "Row $rowNumber: Invalid numeric value for 'amount' ('{$amount}').";
-                    Log::warning($skippedRows[count($skippedRows) - 1], ['record' => $recordData]);
-                    continue; // Skip this row
-                }
-                $amount = floatval($amount); // Convert to float
-
-                // Parse date (handle various formats if necessary)
-                try {
-                    // Attempt common formats, add more as needed (e.g., 'd/m/y', 'm-d-Y')
-                    $parsedDate = Carbon::parse($date)->toDateString();
-                } catch (\Exception $e) {
-                    $skippedRows[] = "Row $rowNumber: Invalid date format ('{$date}').";
-                    Log::warning($skippedRows[count($skippedRows) - 1], ['record' => $recordData]);
-                    continue; // Skip this row
-                }
-
-                // --- Determine Transaction Type and GST (using helper methods) ---
-                $transactionType = $this->determineTransactionType($description, $amount);
-                $gstDetails = $this->calculateGST($amount, $transactionType, $description);
-
-                // --- Create Bank Statement Entry ---
-                // Avoid creating duplicate entries based on date, amount, description (optional but recommended)
-                $existingEntry = BankStatementEntry::where('bank_account_id', $bankAccount->id)
-                                ->where('date', $parsedDate)
-                                ->where('amount', $amount)
-                                ->where('description', $description)
-                                ->first();
-
-                if ($existingEntry) {
-                     $skippedRows[] = "Row $rowNumber: Duplicate entry already exists.";
-                     Log::info($skippedRows[count($skippedRows) - 1], ['record' => $recordData]);
-                     continue;
-                }
-
-
-                // Create the BankStatementEntry (Transaction link might be null initially)
-                $entry = $bankAccount->bankStatementEntries()->create([
-                    'date' => $parsedDate,
-                    'amount' => $amount,
-                    'description' => $description,
-                    'transaction_type' => $transactionType, // Store inferred type
-                    'transaction_id' => null, // Will be linked during reconciliation
-                ]);
-
-                $transactionCount++;
-
-            } catch (\Exception $e) {
-                // Catch any other unexpected errors during row processing
-                $skippedRows[] = "Row $rowNumber: Failed - " . $e->getMessage();
-                Log::error("Error processing CSV row $rowNumber: " . $e->getMessage(), ['record' => $record ?? null]);
-            }
-        }
-
-        // Prepare feedback message
-        $message = "Statement processed. Added $transactionCount new bank statement entries.";
-        if (!empty($skippedRows)) {
-            $message .= " Skipped " . count($skippedRows) . " rows (duplicates or errors). Check logs for details.";
-            Log::warning("CSV Upload Skipped Rows for Bank Account {$bankAccount->id}:", $skippedRows);
-        }
-
-        // Redirect back with feedback
-        return redirect()->route('business-entities.show', [$businessEntity->id, '#tab_bank_accounts'])
-            ->with('success', $message);
-    }
 
     /**
      * Allocate a bank statement entry to an existing transaction.
@@ -1048,87 +747,6 @@ class BusinessEntityController extends Controller
         return view('business-entities.bank-accounts.transactions.create', compact(
             'businessEntity', 'bankAccount', 'transactionTypes', 'businessEntities', 'transactionData'
         ));
-    }
-
-    /**
-     * Extract data from an uploaded receipt using the DocumentScannerService.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Models\BusinessEntity  $businessEntity
-     * @param  \App\Models\BankAccount  $bankAccount
-     * @return \Illuminate\Http\RedirectResponse
-     */
-    public function extractFromReceipt(Request $request, BusinessEntity $businessEntity, BankAccount $bankAccount)
-    {
-         // Authorization check
-        if ($bankAccount->business_entity_id !== $businessEntity->id) {
-            abort(403, 'Unauthorized');
-        }
-
-        // Validate the uploaded receipt file
-        $request->validate([
-            'document' => 'required|file|mimes:jpeg,png,jpg,pdf|max:2048',
-        ]);
-
-        try {
-            $file = $request->file('document');
-
-            // --- Store Receipt File (e.g., Dropbox) ---
-            $fileName = time() . '_' . $file->getClientOriginalName(); // Unique filename
-            $folderPath = "Receipts/{$businessEntity->id}_{$businessEntity->legal_name}";
-            $dropboxPath = "{$folderPath}/{$fileName}";
-
-            // Ensure directory exists and upload to Dropbox
-            if (!Storage::disk('dropbox')->exists($folderPath)) {
-                 Storage::disk('dropbox')->makeDirectory($folderPath);
-            }
-            Storage::disk('dropbox')->put($dropboxPath, file_get_contents($file->getRealPath()));
-
-            // --- Extract Data using Service ---
-            // Save temporarily locally for the service to process
-            $localPath = $file->store('temp_receipts', 'local'); // Store in local storage/app/temp_receipts
-            $fullPath = storage_path('app/' . $localPath);
-
-            // Call the DocumentScannerService
-            $extractedData = $this->scannerService->extractInformation($fullPath, $file->getMimeType());
-
-            // Delete the temporary local file
-            Storage::disk('local')->delete($localPath);
-
-            // --- Prepare Transaction Data ---
-            $transactionData = [
-                'date' => $extractedData['transaction_date'] ?? now()->toDateString(),
-                'amount' => $extractedData['amount'] ?? null,
-                // Generate a description based on extracted company name if available
-                'description' => isset($extractedData['company']) && $extractedData['company'] !== 'Unknown'
-                                ? "Receipt from {$extractedData['company']}"
-                                : ($extractedData['document_type'] ?? 'Scanned Document'),
-                'transaction_type' => null, // User needs to select this
-                'gst_amount' => $extractedData['gst_amount'] ?? null,
-                // Map boolean gst_yes_no to status string
-                'gst_status' => isset($extractedData['gst_yes_no'])
-                                ? ($extractedData['gst_yes_no'] ? 'included' : 'excluded')
-                                : null,
-                'receipt_path' => $dropboxPath, // Link to the stored receipt
-            ];
-
-            // Redirect to the create transaction form with pre-filled data
-            return redirect()
-                ->route('business-entities.bank-accounts.transactions.create', [$businessEntity->id, $bankAccount->id])
-                ->with('transactionData', $transactionData) // Pass data to the view via session flash
-                ->with('success', 'Receipt uploaded and data extracted. Please review and select a transaction type.');
-
-        } catch (\Exception $e) {
-            Log::error("Failed to process receipt for Bank Account {$bankAccount->id}: " . $e->getMessage());
-            // Clean up temp file if it exists and an error occurred
-            if (isset($localPath) && Storage::disk('local')->exists($localPath)) {
-                Storage::disk('local')->delete($localPath);
-            }
-            // Redirect back with an error message
-            return redirect()
-                ->route('business-entities.bank-accounts.transactions.create', [$businessEntity->id, $bankAccount->id])
-                ->with('error', 'Failed to process receipt. Please try again or enter manually.');
-        }
     }
 
     /**

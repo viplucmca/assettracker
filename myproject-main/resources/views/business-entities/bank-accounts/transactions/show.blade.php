@@ -9,7 +9,7 @@
     <p><strong>GST Status:</strong> {{ $transaction->gst_status }}</p>
     @if ($transaction->receipt_path)
         <p><strong>Receipt:</strong> 
-            <a href="{{ \Illuminate\Support\Facades\Storage::disk('dropbox')->temporaryUrl($transaction->receipt_path, now()->addMinutes(30)) }}" target="_blank">View Receipt</a>
+            <a href="{{ \Illuminate\Support\Facades\Storage::disk('s3')->temporaryUrl($transaction->receipt_path, now()->addMinutes(30)) }}" target="_blank">View Receipt</a>
         </p>
     @endif
 @endsection

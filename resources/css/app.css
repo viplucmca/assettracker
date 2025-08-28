@@ -21,3 +21,8 @@
 .tab-content.active {
     @apply block;
 }
+
+/* Widen global containers that use Tailwind's max-w-7xl */
+.max-w-7xl {
+    max-width: 96rem !important; /* 1536px, wider than default 80rem */
+}

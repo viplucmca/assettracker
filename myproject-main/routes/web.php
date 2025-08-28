@@ -10,39 +10,8 @@ use App\Http\Controllers\ReminderController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Storage;
 
-Route::get('/test-dropbox', function () {
-    try {
-        Storage::disk('dropbox')->put('test.txt', 'This is a test file.');
-        return 'File uploaded to Dropbox successfully!';
-    } catch (\Exception $e) {
-        return 'Error: ' . $e->getMessage();
-    }
-});
-
 Route::post('/test-json', function() {
     return response()->json(['status' => 'success', 'message' => 'This is a test JSON response']);
-});
-
-Route::get('/test-s3', function () {
-    try {
-        $directories = Storage::disk('s3')->directories('/');
-        $files = Storage::disk('s3')->files('/');
-        
-        return response()->json([
-            'success' => true,
-            'directories' => $directories,
-            'files' => $files,
-            'bucket' => config('filesystems.disks.s3.bucket'),
-            'region' => config('filesystems.disks.s3.region')
-        ]);
-    } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'error' => $e->getMessage(),
-            'bucket' => config('filesystems.disks.s3.bucket'),
-            'region' => config('filesystems.disks.s3.region')
-        ]);
-    }
 });
 
 Route::get('/', function () {
@@ -103,11 +72,9 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/business-entities/{businessEntity}/bank-accounts', [BusinessEntityController::class, 'storeBankAccount'])->name('business-entities.bank-accounts.store');
     Route::get('/business-entities/{businessEntity}/bank-accounts/{bankAccount}/edit', [BusinessEntityController::class, 'editBankAccount'])->name('business-entities.bank-accounts.edit');
     Route::put('/business-entities/{businessEntity}/bank-accounts/{bankAccount}', [BusinessEntityController::class, 'updateBankAccount'])->name('business-entities.bank-accounts.update');
-    Route::get('/business-entities/{businessEntity}/bank-accounts/{bankAccount}/upload-statement', [BusinessEntityController::class, 'uploadStatement'])->name('business-entities.bank-accounts.upload-statement');
-    Route::post('/business-entities/{businessEntity}/bank-accounts/{bankAccount}/process-statement', [BusinessEntityController::class, 'processStatement'])->name('business-entities.bank-accounts.process-statement');
+
 
     // Transaction Routes
-    Route::post('/business-entities/extract-transaction-info', [BusinessEntityController::class, 'extractTransactionInfo'])->name('business-entities.extract-transaction-info');
     Route::post('business-entities/{businessEntity}/transactions/store', [BusinessEntityController::class, 'storeTransaction'])->name('business-entities.transactions.store');
     Route::get('business-entities/{businessEntity}/transactions/{transaction}/edit', [BusinessEntityController::class, 'editTransaction'])->name('business-entities.transactions.edit');
     Route::put('business-entities/{businessEntity}/transactions/{transaction}', [BusinessEntityController::class, 'updateTransaction'])->name('business-entities.transactions.update');
@@ -116,7 +83,6 @@ Route::middleware(['auth'])->group(function () {
     // Existing Bank Account Transaction Routes
     Route::get('/business-entities/{businessEntity}/bank-accounts/{bankAccount}/transactions/create', [BusinessEntityController::class, 'createTransaction'])->name('business-entities.bank-accounts.transactions.create');
     Route::post('/business-entities/{businessEntity}/bank-accounts/{bankAccount}/transactions', [BusinessEntityController::class, 'storeTransaction'])->name('business-entities.bank-accounts.transactions.store');
-    Route::post('/business-entities/{businessEntity}/bank-accounts/{bankAccount}/extract-from-receipt', [BusinessEntityController::class, 'extractFromReceipt'])->name('business-entities.bank-accounts.extract-from-receipt');
     Route::get('/business-entities/{businessEntity}/bank-accounts/{bankAccount}/transactions/{transaction}', [BusinessEntityController::class, 'showTransaction'])->name('business-entities.bank-accounts.transactions.show');
     Route::post('/business-entities/{businessEntity}/bank-accounts/{bankStatementEntry}/match-transaction', [BusinessEntityController::class, 'matchTransaction'])->name('business-entities.bank-accounts.match-transaction');
 
